@@ -1,0 +1,56 @@
+server:
+  port: 19443
+  servlet:
+    context-path: /brilliance/
+
+#########################################################
+
+# jsckson的配置参数
+
+#########################################################
+spring:
+  jackson:
+    parser:
+      #允许出现特殊字符和转义符
+      allow_unquoted_control_chars: true
+
+      #允许出现单引号
+      allow_single_quotes: true
+
+  #########################################################
+
+  # mysql的配置参数
+
+  #########################################################
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://47.105.180.88:3306/netsign?autoReconnect=true&useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=CONVERT_TO_NULL&useSSL=false&serverTimezone=CTT
+    username: root
+    password: Xiao120315!
+    filters: wall,mergeStat
+    data-source-name: gunsdb
+
+mybatis-plus:
+  typeAliasesPackage: com.brilliance.netsign.entity
+  mapper-locations: classpath:mapper/*.xml
+#########################################################
+
+# swagger的配置参数
+
+#########################################################
+swagger:
+  group-Name: NetSign
+  title: NetSign Restful Api
+  description: NetSign restful test tools
+  license: Apache License Version 2.0
+  version: 2.11.0
+  user-name: weibingtao
+  email: weibingtao@13156050650@163.com
+  #    显示指定包下的controller
+  base-package: com.brilliance.netsign.controller
+  #    对于url路径的筛选
+  antPath:
+  parameter-name: Authorization
+  parameter-type: string
+  parameter-description: token
+  type: header
