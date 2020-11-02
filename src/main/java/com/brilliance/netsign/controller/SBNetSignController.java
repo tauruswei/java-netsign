@@ -1,5 +1,7 @@
 package com.brilliance.netsign.controller;
 
+import com.brilliance.netsign.config.redis.RedisService;
+import com.brilliance.netsign.config.redis.SM2Key;
 import com.brilliance.netsign.dao.KeyDao;
 import com.brilliance.netsign.entity.Key;
 import com.brilliance.netsign.model.*;
@@ -10,15 +12,20 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.apache.commons.beanutils.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.util.Base64Utils;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @Author: WeiBingtao/13156050650@163.com
@@ -35,6 +42,8 @@ public class SBNetSignController {
     BouncyCastleProvider bc = new BouncyCastleProvider();
     @Autowired
     private KeyDao keyDao;
+    @Autowired
+    private RedisService redisService;
 
     @ApiOperation("创建p10请求")
     @PostMapping("/genP10")
@@ -52,28 +61,53 @@ public class SBNetSignController {
         Key privateKey = new Key();
         privateKey.setKeyLabel(pri + requestGenP10Model.getKeyLabel());
         privateKey.setKeyMaterial(responseP10Model.getPriKey());
-        keyDao.insert(privateKey);
+        int insert = keyDao.insert(privateKey);
+        if (insert == 1) {
+            // 缓存 redis
+            Map map = new HashMap<>();
+            map.put("keyLabel", privateKey.getKeyLabel());
+            map.put("keyMaterial", privateKey.getKeyMaterial());
+            map.put("keyEnable", privateKey.getKeyEnable() + "");
+            redisService.hmset(SM2Key.getKey, pri + requestGenP10Model.getKeyLabel(), map);
+        }
+
         Key publicKey = new Key();
         publicKey.setKeyLabel(pub + requestGenP10Model.getKeyLabel());
         publicKey.setKeyMaterial(responseP10Model.getPubKey());
         System.out.println(responseP10Model.getPubKey());
-        keyDao.insert(publicKey);
+        int insert1 = keyDao.insert(publicKey);
+        if (insert1==1){
+            // 缓存 redis
+            Map map = new HashMap<>();
+            map.put("keyLabel",publicKey.getKeyLabel());
+            map.put("keyMaterial",publicKey.getKeyMaterial());
+            map.put("keyEnable",publicKey.getKeyEnable()+"");
+            redisService.hmset(SM2Key.getKey,pub + requestGenP10Model.getKeyLabel(),map);
+        }
         return Result.success(responseP10Model);
-
     }
 
     @ApiOperation("上传证书")
     @PostMapping("/uploadCert")
     public Result uploadCert(@RequestBody RequestUploadCertModel requestUploadCertModel) {
-        keyDao.update(pri + requestUploadCertModel.getKeyLabel());
-        keyDao.update(pub + requestUploadCertModel.getKeyLabel());
+        int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel());
+        if (update == 1) {
+            // 缓存 redis
+            redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "keyEnable","1");
+        }
+        int update1 = keyDao.update(pub + requestUploadCertModel.getKeyLabel());
+        if (update1 == 1) {
+            // 缓存 redis
+            redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "keyEnable","1");
+        }
         return Result.success(true);
     }
-
     @ApiOperation("签名")
     @PostMapping("/sign")
-    public Result sign(@RequestBody RequestSignModel requestSignModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, NoSuchProviderException, UnsupportedEncodingException {
-        Key priKey = keyDao.queryById(pri + requestSignModel.getKeyLabel());
+    public Result sign(@RequestBody RequestSignModel requestSignModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, NoSuchProviderException, UnsupportedEncodingException, InvocationTargetException, IllegalAccessException {
+        Map map = redisService.hgetall("SM2Key::" + pri+requestSignModel.getKeyLabel());
+        Key priKey = new Key();
+        BeanUtils.copyProperties(priKey,map);
         if (1 == priKey.getKeyEnable()) {
             KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
             PrivateKey priv = keyFact.generatePrivate(new PKCS8EncodedKeySpec(Base64Utils.decodeFromString(priKey.getKeyMaterial())));
@@ -89,19 +123,18 @@ public class SBNetSignController {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
         }
     }
-
     @ApiOperation("验签")
     @PostMapping("/verify")
-    public Result verify(@RequestBody RequestVerifyModel requestVerifyModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
-        Key pubkey = keyDao.queryById(pub + requestVerifyModel.getKeyLabel());
+    public Result verify(@RequestBody RequestVerifyModel requestVerifyModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, InvocationTargetException, IllegalAccessException {
+        Map map = redisService.hgetall("SM2Key::" + pub+requestVerifyModel.getKeyLabel());
+        Key pubkey = new Key();
+        BeanUtils.copyProperties(pubkey,map);
         if (1 == pubkey.getKeyEnable()) {
-
             KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
-            PublicKey  publicKey = keyFact.generatePublic(new X509EncodedKeySpec(Base64Utils.decodeFromString(pubkey.getKeyMaterial())));
+            PublicKey publicKey = keyFact.generatePublic(new X509EncodedKeySpec(Base64Utils.decodeFromString(pubkey.getKeyMaterial())));
             Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
             signature.initVerify(publicKey);
             signature.update(Base64Utils.decodeFromString(requestVerifyModel.getOrigBytes()));
-
             return Result.success(signature.verify(Base64Utils.decodeFromString(requestVerifyModel.getSignature())));
         } else {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
@@ -119,17 +152,16 @@ public class SBNetSignController {
     public Result hash(@RequestBody RequestHashModel requestHashModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
         BouncyCastleProvider provider = new BouncyCastleProvider();
         MessageDigest digest = MessageDigest.getInstance("SM3", provider);
-        String digestString=
-                 Base64Utils.encodeToString(digest.digest(Base64Utils.decodeFromString(requestHashModel.getMsgBytes())));
+        String digestString = Base64Utils.encodeToString(digest.digest(Base64Utils.decodeFromString(requestHashModel.getMsgBytes())));
         return Result.success(digestString);
     }
+
     @ApiOperation("删除")
     @PostMapping("/deleteKeyPair")
-    public Result delete(@RequestBody RequestDeleteModel requestDeleteModel) throws NoSuchAlgorithmException,
-            InvalidKeySpecException, InvalidKeyException, SignatureException {
+    public Result delete(@RequestBody RequestDeleteModel requestDeleteModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
         int i = keyDao.deleteById(pri + requestDeleteModel.getKeyLabel());
         int i1 = keyDao.deleteById(pub + requestDeleteModel.getKeyLabel());
-        return Result.success(i==1&i1==1);
+        return Result.success(i == 1 & i1 == 1);
     }
 }
 
