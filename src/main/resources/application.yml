@@ -24,11 +24,25 @@ spring:
   #########################################################
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://47.105.180.88:3306/netsign?autoReconnect=true&useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=CONVERT_TO_NULL&useSSL=false&serverTimezone=CTT
+    url: jdbc:mysql://47.95.204.66:3306/netsign?autoReconnect=true&useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=CONVERT_TO_NULL&useSSL=false&serverTimezone=CTT
     username: root
     password: Xiao120315!
     filters: wall,mergeStat
     data-source-name: gunsdb
+  #########################################################
+
+  # redis的配置参数
+
+  #########################################################
+  redis:
+    host: 47.95.204.66
+    port: 6379
+    timeout: 1000
+    password: 123456
+    poolMaxTotal: 300
+    poolMaxIdle: 200
+    poolMinIdle: 100
+    poolMaxWait: 3
 
 mybatis-plus:
   typeAliasesPackage: com.brilliance.netsign.entity

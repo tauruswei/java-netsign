@@ -10,11 +10,10 @@ import com.brilliance.netsign.result.Result;
 import com.brilliance.netsign.utils.CsrUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.apache.commons.beanutils.BeanUtils;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.apache.commons.beanutils.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.util.Base64Utils;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,6 +25,9 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @Author: WeiBingtao/13156050650@163.com
@@ -39,6 +41,25 @@ import java.util.Map;
 public class SBNetSignController {
     static String pri = "pri_";
     static String pub = "pub_";
+    static int signCount = 0;
+    static int verifyCount = 0;
+
+    static {
+        Runnable helloRunnable = new Runnable() {
+            public void run() {
+                System.out.println("");
+                System.out.println("===========================");
+                System.out.println("Sign count = " + signCount);
+                System.out.println("Verify count = " + verifyCount);
+                System.out.println("===========================");
+                System.out.println("");
+            }
+        };
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.scheduleAtFixedRate(helloRunnable, 0, 1 * 60, TimeUnit.SECONDS);
+    }
+
+
     BouncyCastleProvider bc = new BouncyCastleProvider();
     @Autowired
     private KeyDao keyDao;
@@ -76,13 +97,13 @@ public class SBNetSignController {
         publicKey.setKeyMaterial(responseP10Model.getPubKey());
         System.out.println(responseP10Model.getPubKey());
         int insert1 = keyDao.insert(publicKey);
-        if (insert1==1){
+        if (insert1 == 1) {
             // 缓存 redis
             Map map = new HashMap<>();
-            map.put("keyLabel",publicKey.getKeyLabel());
-            map.put("keyMaterial",publicKey.getKeyMaterial());
-            map.put("keyEnable",publicKey.getKeyEnable()+"");
-            redisService.hmset(SM2Key.getKey,pub + requestGenP10Model.getKeyLabel(),map);
+            map.put("keyLabel", publicKey.getKeyLabel());
+            map.put("keyMaterial", publicKey.getKeyMaterial());
+            map.put("keyEnable", publicKey.getKeyEnable() + "");
+            redisService.hmset(SM2Key.getKey, pub + requestGenP10Model.getKeyLabel(), map);
         }
         return Result.success(responseP10Model);
     }
@@ -93,21 +114,22 @@ public class SBNetSignController {
         int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel());
         if (update == 1) {
             // 缓存 redis
-            redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "keyEnable","1");
+            redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "keyEnable", "1");
         }
         int update1 = keyDao.update(pub + requestUploadCertModel.getKeyLabel());
         if (update1 == 1) {
             // 缓存 redis
-            redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "keyEnable","1");
+            redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "keyEnable", "1");
         }
         return Result.success(true);
     }
+
     @ApiOperation("签名")
     @PostMapping("/sign")
     public Result sign(@RequestBody RequestSignModel requestSignModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, NoSuchProviderException, UnsupportedEncodingException, InvocationTargetException, IllegalAccessException {
-        Map map = redisService.hgetall("SM2Key::" + pri+requestSignModel.getKeyLabel());
+        Map map = redisService.hgetall("SM2Key::" + pri + requestSignModel.getKeyLabel());
         Key priKey = new Key();
-        BeanUtils.copyProperties(priKey,map);
+        BeanUtils.copyProperties(priKey, map);
         if (1 == priKey.getKeyEnable()) {
             KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
             PrivateKey priv = keyFact.generatePrivate(new PKCS8EncodedKeySpec(Base64Utils.decodeFromString(priKey.getKeyMaterial())));
@@ -118,33 +140,38 @@ public class SBNetSignController {
             signature.update(Base64Utils.decodeFromString(requestSignModel.getOrigBytes()));
             // 计算签名值
             byte[] signatureValue = signature.sign();
+            signCount += 1;
             return Result.success(Base64Utils.encodeToString(signatureValue));
         } else {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
         }
     }
+
     @ApiOperation("验签")
     @PostMapping("/verify")
     public Result verify(@RequestBody RequestVerifyModel requestVerifyModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, InvocationTargetException, IllegalAccessException {
-        Map map = redisService.hgetall("SM2Key::" + pub+requestVerifyModel.getKeyLabel());
+        Map map = redisService.hgetall("SM2Key::" + pub + requestVerifyModel.getKeyLabel());
         Key pubkey = new Key();
-        BeanUtils.copyProperties(pubkey,map);
+        BeanUtils.copyProperties(pubkey, map);
         if (1 == pubkey.getKeyEnable()) {
             KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
             PublicKey publicKey = keyFact.generatePublic(new X509EncodedKeySpec(Base64Utils.decodeFromString(pubkey.getKeyMaterial())));
             Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
             signature.initVerify(publicKey);
             signature.update(Base64Utils.decodeFromString(requestVerifyModel.getOrigBytes()));
+            verifyCount += 1;
             return Result.success(signature.verify(Base64Utils.decodeFromString(requestVerifyModel.getSignature())));
         } else {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
         }
     }
 
-    @ApiOperation("测试get方法")
-    @GetMapping("/index")
-    public void index() {
-        System.out.println("test get method");
+    @ApiOperation("签名/验签统计重置")
+    @GetMapping("/reset")
+    public Result reset() {
+        signCount = 0;
+        verifyCount = 0;
+        return Result.success(null);
     }
 
     @ApiOperation("哈希")

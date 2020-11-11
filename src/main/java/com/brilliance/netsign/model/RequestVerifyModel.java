@@ -10,7 +10,7 @@ import lombok.Data;
  * @Date: 2020/9/4 0004 22:34
  */
 @Data
-@ApiModel("签名请求实体")
+@ApiModel("验签请求实体")
 public class RequestVerifyModel {
     String origBytes;
     String signature;
