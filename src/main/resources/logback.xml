@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<configuration debug="false" scan="true" scanPeriod="10 seconds">
+    <!--不打印这个类的日志，这个类会输出敏感信息-->
+    <logger name="org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor" level="OFF"/>
+    <contextName>java-netsign</contextName>
+    <!--定义日志文件的存储地址 勿在 LogBack 的配置中使用相对路径-->
+    <property name="log.path" value="kms-api-log/logfile.log"/>
+
+    <!--输出到控制台-->
+    <appender class="ch.qos.logback.core.ConsoleAppender" name="console">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+
+        </filter>
+        <encoder charset="UTF-8">
+            <!--<pattern>%d %p (%file:%line\)- %m%n</pattern>-->
+            <!--格式化输出：%d:表示日期    %thread:表示线程名     %-7level:级别从左显示7个字符宽度  %msg:日志消息    %n:是换行符-->
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%-7level] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--输出到文件-->
+    <appender class="ch.qos.logback.core.rolling.RollingFileAppender" name="file">
+        <file>${log.path}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>/opt/java-netsign/log/java-netsig.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder charset="UTF-8">
+            <!--&lt;!&ndash;格式化输出：%d:表示日期    %thread:表示线程名     %-5level:级别从左显示5个字符宽度  %msg:日志消息    %n:是换行符&ndash;&gt;-->
+            <!--<pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] %X{ip} %-5level %logger{30} - %msg%n</pattern>-->
+            <!--格式化输出：%d:表示日期    %thread:表示线程名     %-7level:级别从左显示7个字符宽度  %msg:日志消息    %n:是换行符-->
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%-7level] %msg%n</pattern>
+            <!--<charset>GBK</charset>-->
+        </encoder>
+    </appender>
+
+    <!--使用syslog
+    <appender name="syslog" class="ch.qos.logback.classic.net.SyslogAppender">
+        <syslogHost>10.0.50.54</syslogHost>
+        <port>601</port>
+        <facility>LOCAL7</facility>
+        <suffixPattern>%-10level %d{yyyy-MM-dd HH:mm:ss.SSS} %msg%n</suffixPattern>
+    </appender>-->
+
+    <root level="info">
+        <appender-ref ref="console"/>
+        <appender-ref ref="file"/>
+        <!--<appender-ref ref="syslog"/>-->
+    </root>
+</configuration>
