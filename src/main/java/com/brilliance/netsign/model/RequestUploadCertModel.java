@@ -13,12 +13,5 @@ import lombok.Data;
 @ApiModel("上传证书请求实体")
 public class RequestUploadCertModel {
     private String keyLabel;
-
-    public String getKeyLabel() {
-        return keyLabel;
-    }
-
-    public void setKeyLabel(String keyLabel) {
-        this.keyLabel = keyLabel;
-    }
+    private String cert;
 }

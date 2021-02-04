@@ -61,8 +61,8 @@ public interface KeyDao {
      *
      * @return 影响行数
      */
-    @Update("update netsign.key set key_enable = 1 where binary(key_label)= #{keylabel}")
-    int update(String keyLabel);
+    @Update("update netsign.key set key_enable = 1, key_user=#{commonName} where binary(key_label)= #{keyLabel}")
+    int update(String keyLabel,String commonName);
 
     /**
      * 通过主键删除数据

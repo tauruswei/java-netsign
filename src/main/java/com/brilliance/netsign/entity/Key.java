@@ -14,6 +14,17 @@ public class Key implements Serializable {
     private String keyLabel;
     
     private String keyMaterial;
+    private String keyUser;
+    private int signCount;
+    private int verifyCount;
+
+    public String getKeyUser() {
+        return keyUser;
+    }
+
+    public void setKeyUser(String keyUser) {
+        this.keyUser = keyUser;
+    }
 
     private int keyEnable;
 

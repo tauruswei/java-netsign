@@ -7,27 +7,34 @@ import com.brilliance.netsign.entity.Key;
 import com.brilliance.netsign.model.*;
 import com.brilliance.netsign.result.CodeMsg;
 import com.brilliance.netsign.result.Result;
+import com.brilliance.netsign.utils.CertificateUtils;
 import com.brilliance.netsign.utils.CsrUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.apache.commons.beanutils.BeanUtils;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
+import org.bouncycastle.asn1.x509.X509CertificateStructure;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.Base64Utils;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import static com.brilliance.netsign.utils.LogTool.successLog;
 
 /**
  * @Author: WeiBingtao/13156050650@163.com
@@ -39,26 +46,69 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping(value = "/netsign")
 public class SBNetSignController {
+    private static final Logger logger = LoggerFactory.getLogger(SBNetSignController.class);
     static String pri = "pri_";
     static String pub = "pub_";
-    static int signCount = 0;
-    static int verifyCount = 0;
+    static int signCountSum = 0;
+    static int verifyCountSum = 0;
+    static int signCountSumTemp = 0;
+    static int verifyCountSumTemp = 0;
+    static int count = 0;
+    static int time = 1 * 60;
+    static DecimalFormat df = new DecimalFormat("0.00");
 
+    //
+//    static {
+//        Runnable helloRunnable = new Runnable() {
+//            public void run() {
+//                System.out.println("");
+//                System.out.println("===========================");
+//                System.out.print("Sign count = " + signCountSum);
+//                System.out.print("\t");
+//                if(beginTime>0){
+//                    System.out.println("Sign frequency = " +   df.format((float)signCountSum/((System.currentTimeMillis()-beginTime)/1000))+ "/s");
+//                }
+//                System.out.print("Verify count = " + verifyCountSum);
+//                System.out.print("\t");
+//                if(beginTime>0){
+//                    System.out.println("Verify frequency = " +  df.format((float)verifyCountSum/((System.currentTimeMillis()-beginTime)/1000))+ "/s");
+//                }
+//                System.out.println("===========================");
+//                System.out.println("");
+//            }
+//        };
+//        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+//        executor.scheduleAtFixedRate(helloRunnable, 0, 1 * 60, TimeUnit.SECONDS);
+//    }
     static {
         Runnable helloRunnable = new Runnable() {
             public void run() {
                 System.out.println("");
                 System.out.println("===========================");
-                System.out.println("Sign count = " + signCount);
-                System.out.println("Verify count = " + verifyCount);
+                System.out.print("Sign count = " + signCountSum);
+                System.out.print("\t");
+                if (signCountSumTemp >= 0) {
+                    System.out.print("Sign frequency = " + df.format((float) (signCountSum - signCountSumTemp) / time) + "/s");
+                    System.out.print("\t");
+                    System.out.println("count = "+count);
+                }
+                signCountSumTemp = signCountSum;
+
+                System.out.print("Verify count = " + verifyCountSum);
+                System.out.print("\t");
+                if (verifyCountSumTemp >= 0) {
+                    System.out.println("Verify frequency = " + df.format((float) (verifyCountSum - verifyCountSumTemp) / time) + "/s");
+                }
+//                System.out.println("count = "+count);
+                count+=1;
+                verifyCountSumTemp = verifyCountSum;
                 System.out.println("===========================");
                 System.out.println("");
             }
         };
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-        executor.scheduleAtFixedRate(helloRunnable, 0, 1 * 60, TimeUnit.SECONDS);
+        executor.scheduleAtFixedRate(helloRunnable, 0, time, TimeUnit.SECONDS);
     }
-
 
     BouncyCastleProvider bc = new BouncyCastleProvider();
     @Autowired
@@ -89,13 +139,13 @@ public class SBNetSignController {
             map.put("keyLabel", privateKey.getKeyLabel());
             map.put("keyMaterial", privateKey.getKeyMaterial());
             map.put("keyEnable", privateKey.getKeyEnable() + "");
+            map.put("keyUser", "");
             redisService.hmset(SM2Key.getKey, pri + requestGenP10Model.getKeyLabel(), map);
         }
 
         Key publicKey = new Key();
         publicKey.setKeyLabel(pub + requestGenP10Model.getKeyLabel());
         publicKey.setKeyMaterial(responseP10Model.getPubKey());
-        System.out.println(responseP10Model.getPubKey());
         int insert1 = keyDao.insert(publicKey);
         if (insert1 == 1) {
             // 缓存 redis
@@ -103,6 +153,7 @@ public class SBNetSignController {
             map.put("keyLabel", publicKey.getKeyLabel());
             map.put("keyMaterial", publicKey.getKeyMaterial());
             map.put("keyEnable", publicKey.getKeyEnable() + "");
+            map.put("keyUser", "");
             redisService.hmset(SM2Key.getKey, pub + requestGenP10Model.getKeyLabel(), map);
         }
         return Result.success(responseP10Model);
@@ -110,16 +161,23 @@ public class SBNetSignController {
 
     @ApiOperation("上传证书")
     @PostMapping("/uploadCert")
-    public Result uploadCert(@RequestBody RequestUploadCertModel requestUploadCertModel) {
-        int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel());
+    public Result uploadCert(@RequestBody RequestUploadCertModel requestUploadCertModel) throws IOException {
+
+        X509CertificateStructure cert = CertificateUtils.parseCertificate(requestUploadCertModel.getCert());
+        String commonName = cert.getSubject().toString().split("CN=")[1];
+        int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel(), commonName);
         if (update == 1) {
             // 缓存 redis
             redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "keyEnable", "1");
+            redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "keyUser", commonName);
+            redisService.hset(SM2Key.getKey, pri + requestUploadCertModel.getKeyLabel(), "SignCount", "0");
         }
-        int update1 = keyDao.update(pub + requestUploadCertModel.getKeyLabel());
+        int update1 = keyDao.update(pub + requestUploadCertModel.getKeyLabel(), commonName);
         if (update1 == 1) {
             // 缓存 redis
             redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "keyEnable", "1");
+            redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "keyUser", commonName);
+            redisService.hset(SM2Key.getKey, pub + requestUploadCertModel.getKeyLabel(), "VerifyCount", "0");
         }
         return Result.success(true);
     }
@@ -140,7 +198,16 @@ public class SBNetSignController {
             signature.update(Base64Utils.decodeFromString(requestSignModel.getOrigBytes()));
             // 计算签名值
             byte[] signatureValue = signature.sign();
-            signCount += 1;
+            synchronized(SBNetSignController.class){
+                signCountSum += 1;
+            }
+            // 缓存总的签名次数
+//            redisService.set(SM2Key.getKey, "signCountSum", signCountSum);
+            // 缓存用户的签名次数
+            String signCount = redisService.hget("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount");
+            redisService.hset("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount", Integer.parseInt(signCount) + 1 + "");
+            logger.info(successLog("SM2Sign",requestSignModel.getKeyLabel(),priKey.getKeyUser(),
+                    requestSignModel.getOrigBytes(),Base64Utils.encodeToString(signatureValue)));
             return Result.success(Base64Utils.encodeToString(signatureValue));
         } else {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
@@ -159,7 +226,16 @@ public class SBNetSignController {
             Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
             signature.initVerify(publicKey);
             signature.update(Base64Utils.decodeFromString(requestVerifyModel.getOrigBytes()));
-            verifyCount += 1;
+            // 缓存总的验签次数
+            synchronized(SBNetSignController.class) {
+                verifyCountSum += 1;
+            }
+//            redisService.set(SM2Key.getKey, "verifyCountSum", verifyCountSum);
+            // 缓存用户的验签次数
+            String verifyCount = redisService.hget("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount");
+            redisService.hset("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount", Integer.parseInt(verifyCount) + 1 + "");
+            logger.info(successLog("SM2Verify",requestVerifyModel.getKeyLabel(),pubkey.getKeyUser(),
+                    requestVerifyModel.getOrigBytes(),requestVerifyModel.getSignature()));
             return Result.success(signature.verify(Base64Utils.decodeFromString(requestVerifyModel.getSignature())));
         } else {
             return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
@@ -169,8 +245,11 @@ public class SBNetSignController {
     @ApiOperation("签名/验签统计重置")
     @GetMapping("/reset")
     public Result reset() {
-        signCount = 0;
-        verifyCount = 0;
+        signCountSum = 0;
+        signCountSumTemp=0;
+        verifyCountSum = 0;
+        verifyCountSumTemp=0;
+        count=0;
         return Result.success(null);
     }
 
