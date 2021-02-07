@@ -13,7 +13,10 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.apache.commons.beanutils.BeanUtils;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
-import org.bouncycastle.asn1.x509.X509CertificateStructure;
+import org.bouncycastle.asn1.x509.Certificate;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
+import org.bouncycastle.cert.bc.BcX509ExtensionUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +37,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
 import static com.brilliance.netsign.utils.LogTool.successLog;
 
 /**
@@ -163,8 +167,24 @@ public class SBNetSignController {
     @PostMapping("/uploadCert")
     public Result uploadCert(@RequestBody RequestUploadCertModel requestUploadCertModel) throws IOException {
 
-        X509CertificateStructure cert = CertificateUtils.parseCertificate(requestUploadCertModel.getCert());
+        Certificate cert = CertificateUtils.parseCertificate(requestUploadCertModel.getCert());
         String commonName = cert.getSubject().toString().split("CN=")[1];
+        System.out.println(cert.getTBSCertificate().getSerialNumber());
+        SubjectKeyIdentifier s = new BcX509ExtensionUtils().createSubjectKeyIdentifier(cert.getSubjectPublicKeyInfo());
+        System.out.println(s.getKeyIdentifier());
+        String subjectKeyId = cert.getTBSCertificate().getExtensions().getExtension(Extension.subjectKeyIdentifier).getExtnValue().toString();
+//        "#0427 313939363539373433363038353932363036383037363236323835353139363531353436313738"
+        ;
+        String ski = subjectKeyId.split("#0427")[1];
+        System.out.println("199659743608592606807626285519651546178");
+        char[] chars = ski.toCharArray();
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 1; i <chars.length ; i++) {
+            stringBuilder.append(chars[i]);
+            i++;
+        }
+        System.out.println(stringBuilder.toString());
+
         int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel(), commonName);
         if (update == 1) {
             // 缓存 redis
