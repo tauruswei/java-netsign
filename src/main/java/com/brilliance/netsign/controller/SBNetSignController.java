@@ -123,10 +123,10 @@ public class SBNetSignController {
     @ApiOperation("创建p10请求")
     @PostMapping("/genP10")
     public Result genP10(@RequestBody RequestGenP10Model requestGenP10Model) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
-//        if (true == requestGenP10Model.isCover()){
-        keyDao.deleteById(pri + requestGenP10Model.getKeyLabel());
-        keyDao.deleteById(pub + requestGenP10Model.getKeyLabel());
-//        }
+        if (requestGenP10Model.isCover()){
+            keyDao.deleteById(pri + requestGenP10Model.getKeyLabel());
+            keyDao.deleteById(pub + requestGenP10Model.getKeyLabel());
+        }
         ResponseP10Model responseP10Model = null;
         try {
             responseP10Model = CsrUtils.generateCsr(false);
@@ -136,7 +136,15 @@ public class SBNetSignController {
         Key privateKey = new Key();
         privateKey.setKeyLabel(pri + requestGenP10Model.getKeyLabel());
         privateKey.setKeyMaterial(responseP10Model.getPriKey());
-        int insert = keyDao.insert(privateKey);
+        int insert = 0;
+        try{
+            insert = keyDao.insert(privateKey);
+        }catch (Exception e){
+            e.printStackTrace();
+            if(e.getMessage().contains("Duplicate entry")){
+                return Result.error(CodeMsg.CREATE_KEY_PAIR_ERROR.fillArgs(e.getMessage()));
+            }
+        }
         if (insert == 1) {
             // 缓存 redis
             Map map = new HashMap<>();
@@ -167,23 +175,23 @@ public class SBNetSignController {
     @PostMapping("/uploadCert")
     public Result uploadCert(@RequestBody RequestUploadCertModel requestUploadCertModel) throws IOException {
 
+
+
         Certificate cert = CertificateUtils.parseCertificate(requestUploadCertModel.getCert());
         String commonName = cert.getSubject().toString().split("CN=")[1];
-        System.out.println(cert.getTBSCertificate().getSerialNumber());
-        SubjectKeyIdentifier s = new BcX509ExtensionUtils().createSubjectKeyIdentifier(cert.getSubjectPublicKeyInfo());
-        System.out.println(s.getKeyIdentifier());
-        String subjectKeyId = cert.getTBSCertificate().getExtensions().getExtension(Extension.subjectKeyIdentifier).getExtnValue().toString();
-//        "#0427 313939363539373433363038353932363036383037363236323835353139363531353436313738"
-        ;
-        String ski = subjectKeyId.split("#0427")[1];
-        System.out.println("199659743608592606807626285519651546178");
-        char[] chars = ski.toCharArray();
-        StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 1; i <chars.length ; i++) {
-            stringBuilder.append(chars[i]);
-            i++;
-        }
-        System.out.println(stringBuilder.toString());
+//        System.out.println(cert.getTBSCertificate().getSerialNumber());
+//        SubjectKeyIdentifier s = new BcX509ExtensionUtils().createSubjectKeyIdentifier(cert.getSubjectPublicKeyInfo());
+//        System.out.println(s.getKeyIdentifier());
+//        String subjectKeyId = cert.getTBSCertificate().getExtensions().getExtension(Extension.subjectKeyIdentifier).getExtnValue().toString();
+
+//        String ski = subjectKeyId.split("#0427")[1];
+//        char[] chars = ski.toCharArray();
+//        StringBuilder stringBuilder = new StringBuilder();
+//        for (int i = 1; i <chars.length ; i++) {
+//            stringBuilder.append(chars[i]);
+//            i++;
+//        }
+//        System.out.println(stringBuilder.toString());
 
         int update = keyDao.update(pri + requestUploadCertModel.getKeyLabel(), commonName);
         if (update == 1) {
