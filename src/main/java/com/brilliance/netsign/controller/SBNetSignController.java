@@ -240,6 +240,9 @@ public class SBNetSignController {
 //        } else {
 //            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
 //        }
+           synchronized(SBNetSignController.class){
+                signCountSum += 1;
+            }
             return Result.success("MEQCICqwlsKcRJrbAq8Oi32sRmVAGaiEUyvoUJLqDlniBxFcAiB6DPwboXAVyi28ccPjx5xRHzJBdfLTVVrqDYfVzt1jyA==");
     }
 
@@ -269,6 +272,9 @@ public class SBNetSignController {
 //        } else {
 //            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
 //        }
+            synchronized(SBNetSignController.class) {
+                verifyCountSum += 1;
+            }
             return Result.success(true);
     }
 
