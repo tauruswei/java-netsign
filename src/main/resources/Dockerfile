@@ -1,0 +1,1 @@
+FROM java:8EXPOSE 34998COPY  netsign-0.0.1-SNAPSHOT.jar /netsign-0.0.1-SNAPSHOT.jarENTRYPOINT ["java","-jar","netsign-0.0.1-SNAPSHOT.jar"]
