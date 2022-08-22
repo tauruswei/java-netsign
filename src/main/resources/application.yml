@@ -1,10 +1,10 @@
 server:
   port: 19443
-  ssl:
-    key-store: classpath:keystore.p12
-    key-store-password: 12345678
-    keyStoreType: PKCS12
-    keyAlias: tomcat
+#  ssl:
+#    key-store: classpath:keystore.p12
+#    key-store-password: 12345678
+#    keyStoreType: PKCS12
+#    keyAlias: tomcat
   servlet:
     context-path: /brilliance/
 
