@@ -1,0 +1,11 @@
+FROM mysql:5.7
+
+COPY script/db/config/mysql.cnf /etc/mysql/conf.d/mysql.cnf
+
+ENV MYSQL_ROOT_PASSWORD baas
+ENV MYSQL_USER baas
+ENV MYSQL_PASSWORD baas
+ENV MYSQL_DATABASE netsign
+
+COPY script/db/netsign.sql /docker-entrypoint-initdb.d/
+RUN chmod 777 /docker-entrypoint-initdb.d/netsign.sql
