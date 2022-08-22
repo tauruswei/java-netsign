@@ -1,0 +1,39 @@
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+version: '2'
+
+services:
+  database-netsign:
+    container_name: netsign-db
+    image: tauruswei/netsign-db
+    restart: always
+    platform: linux/amd64
+    ports:
+      - 3307:3306
+    volumes:
+      - ./netsign-data/mysqldata/:/var/lib/mysql
+  redis-netsign:
+    container_name: netsign-redis
+    image: redis:3.2.12-alpine3.8
+    restart: always
+    ports:
+      - 6379:6379
+    command: redis-server --save 20 1 --loglevel warning --requirepass baas
+    volumes:
+#      - ./redis.conf:/etc/redis/redis.conf
+      - ./netsign-data/cache:/data
+  backend:
+    container_name: netsign
+    image: tauruswei/netsign
+    restart: always
+    platform: linux/amd64
+    ports:
+      - 34997:19443
+    depends_on:
+      - database-netsign
+      - redis-netsign
+    volumes:
+      - ../../src/main/resources/application.yml:/application.yml

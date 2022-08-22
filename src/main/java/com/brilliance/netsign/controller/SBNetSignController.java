@@ -14,9 +14,6 @@ import io.swagger.annotations.ApiOperation;
 import org.apache.commons.beanutils.BeanUtils;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.x509.Certificate;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
-import org.bouncycastle.cert.bc.BcX509ExtensionUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -213,69 +210,63 @@ public class SBNetSignController {
     @ApiOperation("签名")
     @PostMapping("/sign")
     public Result sign(@RequestBody RequestSignModel requestSignModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, NoSuchProviderException, UnsupportedEncodingException, InvocationTargetException, IllegalAccessException {
-//        Map map = redisService.hgetall("SM2Key::" + pri + requestSignModel.getKeyLabel());
-//        Key priKey = new Key();
-//        BeanUtils.copyProperties(priKey, map);
-//        if (1 == priKey.getKeyEnable()) {
-//            KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
-//            PrivateKey priv = keyFact.generatePrivate(new PKCS8EncodedKeySpec(Base64Utils.decodeFromString(priKey.getKeyMaterial())));
-//            Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
-//            signature.initSign(priv);
-//
-//            // 写入签名原文到算法中
-//            signature.update(Base64Utils.decodeFromString(requestSignModel.getOrigBytes()));
-//            // 计算签名值
-//            byte[] signatureValue = signature.sign();
-//            synchronized(SBNetSignController.class){
-//                signCountSum += 1;
-//            }
-//            // 缓存总的签名次数
-////            redisService.set(SM2Key.getKey, "signCountSum", signCountSum);
-//            // 缓存用户的签名次数
-//            String signCount = redisService.hget("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount");
-//            redisService.hset("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount", Integer.parseInt(signCount) + 1 + "");
-//            logger.info(successLog("SM2Sign",requestSignModel.getKeyLabel(),priKey.getKeyUser(),
-//                    requestSignModel.getOrigBytes(),Base64Utils.encodeToString(signatureValue)));
-//            return Result.success(Base64Utils.encodeToString(signatureValue));
-//        } else {
-//            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
-//        }
-           synchronized(SBNetSignController.class){
+        Map map = redisService.hgetall("SM2Key::" + pri + requestSignModel.getKeyLabel());
+        Key priKey = new Key();
+        BeanUtils.copyProperties(priKey, map);
+        if (1 == priKey.getKeyEnable()) {
+            KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
+            PrivateKey priv = keyFact.generatePrivate(new PKCS8EncodedKeySpec(Base64Utils.decodeFromString(priKey.getKeyMaterial())));
+            Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
+            signature.initSign(priv);
+
+            // 写入签名原文到算法中
+            signature.update(Base64Utils.decodeFromString(requestSignModel.getOrigBytes()));
+            // 计算签名值
+            byte[] signatureValue = signature.sign();
+            synchronized(SBNetSignController.class){
                 signCountSum += 1;
             }
-            return Result.success("MEQCICqwlsKcRJrbAq8Oi32sRmVAGaiEUyvoUJLqDlniBxFcAiB6DPwboXAVyi28ccPjx5xRHzJBdfLTVVrqDYfVzt1jyA==");
+            // 缓存总的签名次数
+//            redisService.set(SM2Key.getKey, "signCountSum", signCountSum);
+            // 缓存用户的签名次数
+            String signCount = redisService.hget("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount");
+            redisService.hset("SM2Key::" + pri + requestSignModel.getKeyLabel(), "SignCount", Integer.parseInt(signCount) + 1 + "");
+            logger.info(successLog("SM2Sign",requestSignModel.getKeyLabel(),priKey.getKeyUser(),
+                    requestSignModel.getOrigBytes(),Base64Utils.encodeToString(signatureValue)));
+            return Result.success(Base64Utils.encodeToString(signatureValue));
+        } else {
+            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
+        }
+//            return Result.success("MEQCICqwlsKcRJrbAq8Oi32sRmVAGaiEUyvoUJLqDlniBxFcAiB6DPwboXAVyi28ccPjx5xRHzJBdfLTVVrqDYfVzt1jyA==");
     }
 
     @ApiOperation("验签")
     @PostMapping("/verify")
     public Result verify(@RequestBody RequestVerifyModel requestVerifyModel) throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException, InvocationTargetException, IllegalAccessException {
-//        Map map = redisService.hgetall("SM2Key::" + pub + requestVerifyModel.getKeyLabel());
-//        Key pubkey = new Key();
-//        BeanUtils.copyProperties(pubkey, map);
-//        if (1 == pubkey.getKeyEnable()) {
-//            KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
-//            PublicKey publicKey = keyFact.generatePublic(new X509EncodedKeySpec(Base64Utils.decodeFromString(pubkey.getKeyMaterial())));
-//            Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
-//            signature.initVerify(publicKey);
-//            signature.update(Base64Utils.decodeFromString(requestVerifyModel.getOrigBytes()));
-//            // 缓存总的验签次数
-//            synchronized(SBNetSignController.class) {
-//                verifyCountSum += 1;
-//            }
-////            redisService.set(SM2Key.getKey, "verifyCountSum", verifyCountSum);
-//            // 缓存用户的验签次数
-//            String verifyCount = redisService.hget("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount");
-//            redisService.hset("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount", Integer.parseInt(verifyCount) + 1 + "");
-//            logger.info(successLog("SM2Verify",requestVerifyModel.getKeyLabel(),pubkey.getKeyUser(),
-//                    requestVerifyModel.getOrigBytes(),requestVerifyModel.getSignature()));
-//            return Result.success(signature.verify(Base64Utils.decodeFromString(requestVerifyModel.getSignature())));
-//        } else {
-//            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
-//        }
+        Map map = redisService.hgetall("SM2Key::" + pub + requestVerifyModel.getKeyLabel());
+        Key pubkey = new Key();
+        BeanUtils.copyProperties(pubkey, map);
+        if (1 == pubkey.getKeyEnable()) {
+            KeyFactory keyFact = KeyFactory.getInstance("EC", bc);
+            PublicKey publicKey = keyFact.generatePublic(new X509EncodedKeySpec(Base64Utils.decodeFromString(pubkey.getKeyMaterial())));
+            Signature signature = Signature.getInstance(GMObjectIdentifiers.sm2sign_with_sm3.toString(), new BouncyCastleProvider());
+            signature.initVerify(publicKey);
+            signature.update(Base64Utils.decodeFromString(requestVerifyModel.getOrigBytes()));
+            // 缓存总的验签次数
             synchronized(SBNetSignController.class) {
                 verifyCountSum += 1;
             }
-            return Result.success(true);
+//            redisService.set(SM2Key.getKey, "verifyCountSum", verifyCountSum);
+            // 缓存用户的验签次数
+            String verifyCount = redisService.hget("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount");
+            redisService.hset("SM2Key::" + pub + requestVerifyModel.getKeyLabel(), "VerifyCount", Integer.parseInt(verifyCount) + 1 + "");
+            logger.info(successLog("SM2Verify",requestVerifyModel.getKeyLabel(),pubkey.getKeyUser(),
+                    requestVerifyModel.getOrigBytes(),requestVerifyModel.getSignature()));
+            return Result.success(signature.verify(Base64Utils.decodeFromString(requestVerifyModel.getSignature())));
+        } else {
+            return Result.error(CodeMsg.SIGN_VERIFY_ERROR);
+        }
+//            return Result.success(true);
     }
 
     @ApiOperation("签名/验签统计重置")
