@@ -2,7 +2,7 @@
 模拟签名服务器
 接口包括：生成P10（sm2），签名，验签，上传证书，哈希，删除密钥对，清空signCount和verifyCount
 
-### 编译镜像（默认使用docker-compose.yaml中的默认镜像）
+### 编译镜像（optional,可以使用docker-compose.yaml中的默认镜像）
 
 ```bash
 # 编译数据库
